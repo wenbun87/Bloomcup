@@ -46,8 +46,6 @@ export default function App() {
           .maybeSingle();
         const modelId = modelUser?.id;
 
-        const userIds = [modelId, user?.id].filter(Boolean);
-
         const [
           { data: entries, error: eErr },
           { data: matches, error: mErr },
@@ -62,12 +60,11 @@ export default function App() {
             .select('*')
             .eq('tournament_id', tournament.id)
             .order('scheduled_at'),
-          userIds.length
-            ? supabase
-                .from('predictions')
-                .select('user_id, match_id, predicted_outcome, confidence')
-                .in('user_id', userIds)
-            : Promise.resolve({ data: [], error: null }),
+          supabase
+            .from('predictions')
+            .select(
+              'user_id, match_id, predicted_outcome, confidence, points_awarded, profile:profiles(id, display_name, is_model)'
+            ),
         ]);
         if (eErr) throw eErr;
         if (mErr) throw mErr;
@@ -90,7 +87,9 @@ export default function App() {
     if (!user || !data) return;
     const { data: fresh } = await supabase
       .from('predictions')
-      .select('user_id, match_id, predicted_outcome, confidence')
+      .select(
+        'user_id, match_id, predicted_outcome, confidence, points_awarded, profile:profiles(id, display_name, is_model)'
+      )
       .eq('user_id', user.id);
     setData((d) => {
       const others = d.predictions.filter((p) => p.user_id !== user.id);
@@ -145,6 +144,10 @@ export default function App() {
           {tournament.metadata?.host_country && ` · ${tournament.metadata.host_country}`}
         </p>
       </header>
+
+      <div className="leaderboard-wrap">
+        <Leaderboard predictions={predictions} currentUserId={user?.id} />
+      </div>
 
       <div className="groups">
         {sortedGroupLabels.map((label) => (
@@ -253,6 +256,87 @@ function AuthBar({ user, profile }) {
       </div>
       {err && <div className="status error">⚠ {err}</div>}
       {info && <div className="status ok">✓ {info}</div>}
+    </div>
+  );
+}
+
+function Leaderboard({ predictions, currentUserId }) {
+  const byUser = new Map();
+  for (const p of predictions) {
+    if (!p.profile) continue;
+    const row = byUser.get(p.user_id) ?? {
+      profile: p.profile,
+      picks: 0,
+      points: 0,
+      correct: 0,
+    };
+    row.picks += 1;
+    row.points += p.points_awarded ?? 0;
+    if ((p.points_awarded ?? 0) > 0) row.correct += 1;
+    byUser.set(p.user_id, row);
+  }
+
+  const rows = [...byUser.values()].sort(
+    (a, b) => b.points - a.points || b.picks - a.picks
+  );
+
+  const anyPoints = rows.some((r) => r.points > 0);
+
+  return (
+    <div className="card leaderboard">
+      <div className="leaderboard-header">
+        <h2>🏆 Leaderboard</h2>
+        <span className="leaderboard-meta">
+          {rows.filter((r) => !r.profile.is_model).length} players · {rows.find((r) => r.profile.is_model)?.picks ?? 0} model picks
+        </span>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="empty-leaderboard">no picks yet — be the first to play.</p>
+      ) : (
+        <table className="lb-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>player</th>
+              <th>picks</th>
+              <th>{anyPoints ? 'points' : '—'}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => {
+              const isYou = r.profile.id === currentUserId;
+              const isModel = r.profile.is_model;
+              return (
+                <tr
+                  key={r.profile.id}
+                  className={[
+                    isYou && 'lb-row--you',
+                    isModel && 'lb-row--model',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                >
+                  <td className="lb-rank">{i + 1}</td>
+                  <td className="lb-name">
+                    {isModel && <span className="lb-emoji" aria-hidden="true">🤖</span>}
+                    {r.profile.display_name}
+                    {isYou && <span className="lb-tag">you</span>}
+                  </td>
+                  <td className="lb-picks">{r.picks}</td>
+                  <td className="lb-points">{anyPoints ? r.points : '—'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+
+      {!anyPoints && rows.length > 0 && (
+        <p className="leaderboard-note">
+          points start tallying once matches finish (kicks off June 11).
+        </p>
+      )}
     </div>
   );
 }
