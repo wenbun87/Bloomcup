@@ -1,4 +1,4 @@
-# Sport Prediction Lab
+# Bloomcup
 
 A multi-sport tournament prediction platform. Phase 1: 2026 Men's Football World Cup. Architected so any future sport (tennis, cricket, basketball...) plugs in as a new module without touching the core engine.
 
@@ -33,7 +33,19 @@ The rule: anything sport-specific lives in `/sports/<sport>/`. If you find yours
 
 1. Create a Supabase project for this app.
 2. Run `db/migrations/001_initial_schema.sql` in the Supabase SQL editor.
-3. (Coming next session) install frontend, configure env, run `vite dev`.
+3. Create the "model" predictor user (see [db/README.md](db/README.md)).
+4. Install + run the frontend:
+   ```bash
+   npm install
+   cp .env.example .env   # then fill in VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY
+   npm run dev            # http://localhost:5173
+   ```
+5. You should see the registered sport (Football) load from Supabase.
+
+## Deploying
+
+Cloudflare Pages, build command `npm run build`, output dir `dist`.
+Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` as Pages env vars.
 
 ## Build phases
 
