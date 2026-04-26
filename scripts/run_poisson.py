@@ -28,9 +28,10 @@ from supabase import create_client, ClientOptions
 load_dotenv()
 
 N_SIMULATIONS = 10_000
-ELO_TO_GOAL_DIFF = 0.004     # 100 Elo ≈ 0.4 expected goal diff
+ELO_TO_GOAL_DIFF = 0.004     # 1 Elo point ≈ 0.004 goals (so ~250 Elo per goal of diff)
 AVG_INTERNATIONAL_GOALS = 2.5
-MIN_XG = 0.1                  # don't let xG go negative or near-zero
+MIN_XG = 0.15                 # floor — even huge underdogs score sometimes
+MAX_XG = 4.5                  # ceiling — avoids absurd modal scores
 HOST_NATIONS = {'United States', 'USA', 'Canada', 'Mexico'}
 HOST_ADVANTAGE = 0.3          # extra xG for host nations playing at home
 
@@ -44,10 +45,12 @@ def env(*keys):
 
 
 def predict(home_elo, away_elo, home_is_host):
-    elo_diff = (home_elo - away_elo) * ELO_TO_GOAL_DIFF * 100
+    elo_diff = (home_elo - away_elo) * ELO_TO_GOAL_DIFF
     home_advantage = HOST_ADVANTAGE if home_is_host else 0
-    home_xg = max(MIN_XG, (AVG_INTERNATIONAL_GOALS + elo_diff) / 2 + home_advantage)
-    away_xg = max(MIN_XG, (AVG_INTERNATIONAL_GOALS - elo_diff) / 2)
+    home_xg = (AVG_INTERNATIONAL_GOALS + elo_diff) / 2 + home_advantage
+    away_xg = (AVG_INTERNATIONAL_GOALS - elo_diff) / 2
+    home_xg = min(MAX_XG, max(MIN_XG, home_xg))
+    away_xg = min(MAX_XG, max(MIN_XG, away_xg))
 
     home_goals = np.random.poisson(home_xg, N_SIMULATIONS)
     away_goals = np.random.poisson(away_xg, N_SIMULATIONS)
