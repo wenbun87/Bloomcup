@@ -951,15 +951,18 @@ function MatchRow({ match, accent, user, onPredictionSaved }) {
 
       {modelPred && !finished && (
         <div className="bot-strip">
-          <span className="bot-strip__label">🤖 bot says</span>
-          <span className="bot-strip__score">
-            {modelPred.predicted_outcome.home_score}–{modelPred.predicted_outcome.away_score}
-          </span>
-          <span className="bot-strip__bar">
-            <span style={{ flex: modelPred.predicted_outcome.p_home_win || 0, background: '#ff6b9d' }} />
-            <span style={{ flex: modelPred.predicted_outcome.p_draw || 0, background: '#1a1a1a', opacity: 0.3 }} />
-            <span style={{ flex: modelPred.predicted_outcome.p_away_win || 0, background: '#9d6bff' }} />
-          </span>
+          <div className="bot-strip__row">
+            <span className="bot-strip__label">🤖 bot says</span>
+            <span className="bot-strip__score">
+              {modelPred.predicted_outcome.home_score}–{modelPred.predicted_outcome.away_score}
+            </span>
+            <span className="bot-strip__bar">
+              <span style={{ flex: modelPred.predicted_outcome.p_home_win || 0, background: '#ff6b9d' }} />
+              <span style={{ flex: modelPred.predicted_outcome.p_draw || 0, background: '#1a1a1a', opacity: 0.3 }} />
+              <span style={{ flex: modelPred.predicted_outcome.p_away_win || 0, background: '#9d6bff' }} />
+            </span>
+          </div>
+          <div className="bot-strip__why">{explainBotPick(match, modelPred)}</div>
         </div>
       )}
 
@@ -1068,4 +1071,42 @@ function formatMatchTime(iso) {
     weekday: 'short', month: 'short', day: 'numeric',
     hour: 'numeric', minute: '2-digit',
   });
+}
+
+function explainBotPick(match, modelPred) {
+  const out = modelPred?.predicted_outcome;
+  if (!out) return '';
+
+  const homeName = match.home?.team.name || 'home';
+  const awayName = match.away?.team.name || 'away';
+  const homeElo = match.home?.team.metadata?.elo ?? 1500;
+  const awayElo = match.away?.team.metadata?.elo ?? 1500;
+  const eloDiff = homeElo - awayElo;
+
+  const probs = [
+    { kind: 'home', label: homeName, p: out.p_home_win ?? 0 },
+    { kind: 'draw', label: 'a draw', p: out.p_draw ?? 0 },
+    { kind: 'away', label: awayName, p: out.p_away_win ?? 0 },
+  ].sort((a, b) => b.p - a.p);
+
+  const top = probs[0];
+  const margin = top.p - probs[1].p;
+
+  let vibe;
+  if (margin < 0.06) vibe = 'a real coin flip';
+  else if (margin < 0.15) vibe = `slight edge to ${top.label}`;
+  else if (margin < 0.30) vibe = `${top.label} favoured`;
+  else vibe = `${top.label} comfortable favourite`;
+
+  const topPct = Math.round(top.p * 100);
+  const outcome = top.kind === 'draw' ? `${topPct}% draw` : `${topPct}% ${top.label} win`;
+
+  let extra = '';
+  if (Math.abs(eloDiff) >= 200) {
+    extra = ` · ${Math.abs(eloDiff)} Elo gap`;
+  } else if (out.home_xg != null && out.away_xg != null) {
+    extra = ` · should score ~${out.home_xg.toFixed(1)} vs ~${out.away_xg.toFixed(1)}`;
+  }
+
+  return `${vibe} · ${outcome}${extra}`;
 }
