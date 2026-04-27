@@ -50,7 +50,7 @@ function Star({ size = 30, color = '#ffd93d' }) {
    Top-level App
    ───────────────────────────────────────────────────────────── */
 
-const VALID_VIEWS = ['fixtures', 'leaderboard', 'mypicks'];
+const VALID_VIEWS = ['fixtures', 'leaderboard', 'mypicks', 'settings'];
 
 export default function App() {
   const { user, loading: authLoading } = useAuth();
@@ -297,6 +297,10 @@ export default function App() {
             onNav={handleNav}
           />
         )}
+
+        {view === 'settings' && (
+          <Settings user={user} profile={profile} setProfile={setProfile} />
+        )}
       </main>
 
       <Footer />
@@ -356,7 +360,12 @@ function Nav({ user, profile, view, onNav }) {
             <span className="nav__user">
               <strong>{profile?.display_name || user.email}</strong>
             </span>
-            <button onClick={signOut} className="nav__avatar" title="sign out">
+            <button
+              type="button"
+              onClick={() => onNav('settings')}
+              className={`nav__avatar ${view === 'settings' ? 'nav__avatar--active' : ''}`}
+              title="settings"
+            >
               {initial}
             </button>
           </>
@@ -695,6 +704,118 @@ function MyPicks({ user, predictions, matches, entries, modelId, onPredictionSav
         })}
       </div>
     </section>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Settings tab
+   ───────────────────────────────────────────────────────────── */
+
+function Settings({ user, profile, setProfile }) {
+  const heading = (
+    <h2 className="section-h2">
+      <Flower size={32} c1="#9d6bff" c2="#ffd93d" />
+      <span>Your settings</span>
+      <Flower size={32} c1="#ff6b9d" c2="#ffd93d" />
+    </h2>
+  );
+
+  if (!user) {
+    return (
+      <section className="settings">
+        {heading}
+        <div className="my-picks__empty">
+          <Star size={40} color="#ffd93d" />
+          <p className="my-picks__empty-title">Sign in to manage your account.</p>
+          <p className="my-picks__empty-sub">Use the sign-in card above.</p>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="settings">
+      {heading}
+      <div className="settings-stack">
+        <DisplayNameCard user={user} profile={profile} setProfile={setProfile} />
+        <AccountCard user={user} />
+      </div>
+    </section>
+  );
+}
+
+function DisplayNameCard({ user, profile, setProfile }) {
+  const [name, setName] = useState(profile?.display_name || '');
+  const [busy, setBusy] = useState(false);
+  const [flash, setFlash] = useState(false);
+  const [err, setErr] = useState(null);
+
+  useEffect(() => {
+    setName(profile?.display_name || '');
+  }, [profile?.display_name]);
+
+  const dirty = name.trim().length > 0 && name.trim() !== profile?.display_name;
+
+  async function save(e) {
+    e.preventDefault();
+    if (!dirty) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .update({ display_name: name.trim() })
+        .eq('id', user.id)
+        .select()
+        .single();
+      if (error) throw error;
+      setProfile(data);
+      setFlash(true);
+      setTimeout(() => setFlash(false), 1500);
+    } catch (e2) {
+      setErr(e2.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="settings-card">
+      <h3 className="settings-card__title">Display name</h3>
+      <p className="settings-card__sub">how you'll appear on the leaderboard.</p>
+      <form onSubmit={save} className="settings-form">
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="your name"
+          maxLength={40}
+          className="settings-input"
+        />
+        <button
+          type="submit"
+          disabled={!dirty || busy}
+          className={`settings-btn settings-btn--primary ${flash ? 'is-flash' : ''}`}
+        >
+          {flash ? '✓ saved' : busy ? '…' : 'save'}
+        </button>
+      </form>
+      {err && <p className="settings-error">⚠ {err}</p>}
+    </div>
+  );
+}
+
+function AccountCard({ user }) {
+  return (
+    <div className="settings-card">
+      <h3 className="settings-card__title">Account</h3>
+      <p className="settings-card__sub">
+        signed in as <strong>{user.email}</strong>
+      </p>
+      <button type="button" onClick={signOut} className="settings-btn settings-btn--danger">
+        sign out
+      </button>
+    </div>
   );
 }
 

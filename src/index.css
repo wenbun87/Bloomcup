@@ -168,6 +168,10 @@ a { color: inherit; text-decoration: none; cursor: pointer; }
   transition: transform 0.15s;
 }
 .nav__avatar:hover { transform: scale(1.08); }
+.nav__avatar--active {
+  outline: 3px solid var(--yellow);
+  outline-offset: 2px;
+}
 
 /* Hero ──────────────────────────────────────────────── */
 
@@ -860,6 +864,124 @@ a { color: inherit; text-decoration: none; cursor: pointer; }
   padding: 4px 12px;
   border-radius: var(--radius-pill);
   margin-bottom: 10px;
+}
+
+/* Settings tab ──────────────────────────────────────── */
+
+.settings { padding: 8px 0 32px; position: relative; z-index: 1; }
+
+.settings-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 520px;
+  margin: 24px auto 0;
+}
+
+.settings-card {
+  background: #fff;
+  border: var(--stroke-fat);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 22px 24px;
+}
+
+.settings-card__title {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+
+.settings-card__sub {
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin-bottom: 16px;
+}
+
+.settings-form {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.settings-input {
+  flex: 1;
+  padding: 10px 14px;
+  border: var(--stroke);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-weight: 500;
+  background: var(--yellow-soft);
+  outline: none;
+  transition: box-shadow 0.15s;
+}
+
+.settings-input:focus {
+  box-shadow: var(--shadow);
+}
+
+.settings-btn {
+  padding: 10px 22px;
+  border: none;
+  border-radius: var(--radius-pill);
+  font: inherit;
+  font-weight: 800;
+  font-size: 14px;
+  cursor: pointer;
+  transition: transform 0.12s, box-shadow 0.12s, background 0.12s;
+  font-family: inherit;
+}
+
+.settings-btn--primary {
+  background: var(--ink);
+  color: var(--bg);
+  box-shadow: 4px 4px 0 var(--pink);
+}
+
+.settings-btn--primary:hover:not(:disabled) {
+  transform: translate(-1px, -1px);
+  box-shadow: 5px 5px 0 var(--pink);
+}
+
+.settings-btn--primary:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--pink);
+}
+
+.settings-btn--primary:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.settings-btn--primary.is-flash {
+  background: var(--green);
+  color: #fff;
+  box-shadow: 4px 4px 0 var(--ink);
+  opacity: 1;
+}
+
+.settings-btn--danger {
+  background: var(--pink);
+  color: #fff;
+  box-shadow: 4px 4px 0 var(--ink);
+}
+
+.settings-btn--danger:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 5px 5px 0 var(--ink);
+}
+
+.settings-btn--danger:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--ink);
+}
+
+.settings-error {
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--pink);
+  font-weight: 600;
 }
 
 /* Footer ────────────────────────────────────────────── */
