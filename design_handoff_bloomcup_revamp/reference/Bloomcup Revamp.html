@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bloomcup — Revamp Directions</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=IBM+Plex+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Archivo+Black&family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&family=Fraunces:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=DM+Sans:wght@400;500;700;800;900&family=Caveat:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; background: #f0eee9; font-family: 'Inter', system-ui, sans-serif; }
+    #root { height: 100vh; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script src="data.js"></script>
+
+  <script type="text/babel" src="design-canvas.jsx"></script>
+  <script type="text/babel" src="d1-botanical-editorial.jsx"></script>
+  <script type="text/babel" src="d2-riso-stadium.jsx"></script>
+  <script type="text/babel" src="d3-dark-bloom.jsx"></script>
+  <script type="text/babel" src="d4-soft-modern.jsx"></script>
+  <script type="text/babel" src="d5-maximalist-garden.jsx"></script>
+
+  <script type="text/babel" data-presets="react">
+    function App() {
+      const ARTBOARD_W = 1280;
+      const ARTBOARD_H = 1700;
+
+      return (
+        <DesignCanvas
+          title="Bloomcup — Revamp"
+          subtitle="Five directions for the prediction game. Each keeps the floral DNA but pushes a different personality."
+        >
+          <DCSection
+            id="directions"
+            title="Five visual directions"
+            subtitle="Click any board's corner arrow to focus it fullscreen. Same content (hero + sign-in + leaderboard + 4 group cards) across all five so personality is the only variable."
+          >
+            <DCArtboard id="d1" label="01 · Botanical Editorial" subtitle="Serif broadsheet × pressed flowers. FT meets a botanical journal." width={ARTBOARD_W} height={ARTBOARD_H}>
+              <window.D1 />
+            </DCArtboard>
+
+            <DCArtboard id="d2" label="02 · Risograph Stadium" subtitle="Match-day program. Two spot colors, halftones, fat italic display." width={ARTBOARD_W} height={ARTBOARD_H}>
+              <window.D2 />
+            </DCArtboard>
+
+            <DCArtboard id="d3" label="03 · Dark Bloom" subtitle="Bioluminescent night garden. Neon dark mode, terminal density." width={ARTBOARD_W} height={ARTBOARD_H}>
+              <window.D3 />
+            </DCArtboard>
+
+            <DCArtboard id="d4" label="04 · Soft Modern" subtitle="Refined evolution of current. Cream + sage + dusty pink, Notion-y polish." width={ARTBOARD_W} height={ARTBOARD_H}>
+              <window.D4 />
+            </DCArtboard>
+
+            <DCArtboard id="d5" label="05 · Maximalist Garden" subtitle="Joyful chaos. Sticker energy, chunky type, hard shadows, full-bleed flora." width={ARTBOARD_W} height={ARTBOARD_H}>
+              <window.D5 />
+            </DCArtboard>
+          </DCSection>
+        </DesignCanvas>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
