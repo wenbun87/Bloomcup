@@ -223,6 +223,20 @@ export default function App() {
   const modelPoints = modelPicks.reduce((a, p) => a + (p.points_awarded ?? 0), 0);
   const vsModel = yourPoints - modelPoints;
 
+  // What hasn't the user picked yet? (for the hero CTA)
+  const yourPickedIds = new Set(yourPicks.map((p) => p.match_id));
+  const firstUnpicked = user
+    ? matches.find((m) => !yourPickedIds.has(m.id) && new Date(m.scheduled_at) > new Date())
+    : null;
+  const unpickedCount = user
+    ? matches.filter(
+        (m) => !yourPickedIds.has(m.id) && new Date(m.scheduled_at) > new Date()
+      ).length
+    : matches.length;
+  const firstUnpickedGroup = firstUnpicked
+    ? entryById[firstUnpicked.home_entry_id]?.group_label
+    : null;
+
   // Player rank (humans only)
   const byUser = new Map();
   for (const p of predictions) {
@@ -251,6 +265,8 @@ export default function App() {
           yourPicks={yourPicks.length}
           yourPoints={yourPoints}
           vsModel={vsModel}
+          unpickedCount={unpickedCount}
+          firstUnpickedGroup={firstUnpickedGroup}
           onNav={handleNav}
         />
       )}
@@ -381,12 +397,37 @@ function Nav({ user, profile, view, onNav }) {
    Hero
    ───────────────────────────────────────────────────────────── */
 
-function Hero({ tournament, signedIn, yourRank, yourCorrect, yourPicks, yourPoints, vsModel }) {
+function Hero({
+  tournament, signedIn, yourRank, yourCorrect, yourPicks, yourPoints, vsModel,
+  unpickedCount, firstUnpickedGroup, onNav,
+}) {
   const daysToKickoff = (() => {
     if (!tournament?.start_date) return null;
     const ms = new Date(tournament.start_date) - new Date();
     return Math.max(0, Math.ceil(ms / 86400000));
   })();
+
+  function handleCta(e) {
+    e.preventDefault();
+    if (!signedIn) {
+      document.getElementById('auth')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    if (unpickedCount === 0) {
+      onNav?.('leaderboard');
+      return;
+    }
+    const target = firstUnpickedGroup
+      ? document.getElementById(`group-${firstUnpickedGroup}`)
+      : document.querySelector('.groups-section');
+    target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  const ctaContent = !signedIn
+    ? { label: 'Get started', shine: 'sign in →' }
+    : unpickedCount === 0
+    ? { label: 'All picks in', shine: 'view leaderboard →' }
+    : { label: 'Make your picks', shine: `${unpickedCount} left ✿` };
 
   return (
     <section className="hero">
@@ -400,10 +441,14 @@ function Hero({ tournament, signedIn, yourRank, yourCorrect, yourPicks, yourPoin
       </div>
 
       <h1 className="hero__title">
-        <span className="hero__line">PICK</span>
-        <span className="hero__chip hero__chip--yellow">the matches.</span>
-        <span className="hero__line">BEAT</span>
-        <span className="hero__chip hero__chip--purple">the model.</span>
+        <span className="hero__row">
+          <span className="hero__line">PICK</span>
+          <span className="hero__chip hero__chip--yellow">the matches.</span>
+        </span>
+        <span className="hero__row">
+          <span className="hero__line">BEAT</span>
+          <span className="hero__chip hero__chip--purple">the model.</span>
+        </span>
       </h1>
 
       <p className="hero__lede">
@@ -414,10 +459,10 @@ function Hero({ tournament, signedIn, yourRank, yourCorrect, yourPicks, yourPoin
       </p>
 
       <div className="hero__cta-row">
-        <a href="#fixtures" className="big-btn">
-          <span>{signedIn ? "Make today's picks" : 'Get started'}</span>
-          <span className="big-btn__shine">3 open ✿</span>
-        </a>
+        <button type="button" onClick={handleCta} className="big-btn">
+          <span>{ctaContent.label}</span>
+          <span className="big-btn__shine">{ctaContent.shine}</span>
+        </button>
         <span className="hero__cta-decor"><Leaf size={50} color="#6dba63" /></span>
       </div>
 

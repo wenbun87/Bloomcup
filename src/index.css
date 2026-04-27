@@ -197,23 +197,29 @@ a { color: inherit; text-decoration: none; cursor: pointer; }
 }
 
 .hero__title {
-  font-size: 0;
   margin: 0 0 28px;
   line-height: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: center;
+}
+.hero__row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 .hero__line {
-  display: inline-block;
-  font-size: clamp(64px, 11vw, 124px);
+  font-size: clamp(56px, 11vw, 124px);
   font-weight: 900;
   letter-spacing: -0.04em;
   line-height: 0.9;
   color: var(--ink);
-  margin-right: 18px;
-  vertical-align: middle;
 }
 .hero__chip {
-  display: inline-block;
-  font-size: clamp(36px, 6vw, 64px);
+  font-size: clamp(32px, 6vw, 64px);
   font-weight: 700;
   font-family: 'Caveat', 'Comic Sans MS', cursive;
   font-style: italic;
@@ -223,8 +229,6 @@ a { color: inherit; text-decoration: none; cursor: pointer; }
   box-shadow: var(--shadow);
   color: var(--ink);
   line-height: 1.1;
-  margin-right: 12px;
-  vertical-align: middle;
 }
 .hero__chip--yellow { background: var(--yellow); transform: rotate(-3deg); }
 .hero__chip--purple { background: var(--purple); color: #fff; transform: rotate(2deg); }
@@ -1012,8 +1016,10 @@ a { color: inherit; text-decoration: none; cursor: pointer; }
   .app { padding: 16px 16px 0; }
   .nav { gap: 14px; padding: 10px 16px; flex-wrap: wrap; }
   .nav__links { display: none; }
-  .hero__line { font-size: 56px; margin-right: 10px; }
-  .hero__chip { font-size: 32px; padding: 2px 14px; margin-right: 8px; }
+  .bg-decor { display: none; }
+  .hero__title { gap: 8px; }
+  .hero__row { gap: 10px; }
+  .hero__chip { padding: 2px 14px; }
   .stat-bubbles { gap: 10px; }
   .stat-bubble { min-width: 100px; padding: 10px 16px; }
   .stat-bubble__num { font-size: 28px; }
@@ -1022,5 +1028,6 @@ a { color: inherit; text-decoration: none; cursor: pointer; }
   .lb-pts { font-size: 20px; }
   .groups { grid-template-columns: 1fr; }
   .group-card { padding: 16px 18px; }
+  .my-picks__stats { gap: 10px; }
   .footer { margin: 40px -16px 0; }
 }
