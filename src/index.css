@@ -121,9 +121,21 @@ a { color: inherit; text-decoration: none; cursor: pointer; }
   color: rgba(255, 255, 255, 0.6);
   font-weight: 600;
   transition: background 0.15s, color 0.15s;
+  background: transparent;
+  border: none;
+  font-family: inherit;
+  cursor: pointer;
 }
 .nav__link:hover { color: rgba(255, 255, 255, 0.9); }
 .nav__link--active { color: var(--ink); background: var(--yellow); }
+.nav__brand {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-family: inherit;
+  color: inherit;
+}
 
 .nav__right {
   margin-left: auto;
@@ -762,6 +774,92 @@ a { color: inherit; text-decoration: none; cursor: pointer; }
   background: var(--green);
   color: #fff;
   opacity: 1;
+}
+
+/* My Picks tab ──────────────────────────────────────── */
+
+.my-picks { padding: 8px 0 32px; position: relative; z-index: 1; }
+
+.my-picks__empty {
+  max-width: 480px;
+  margin: 24px auto 0;
+  padding: 32px 24px;
+  background: #fff;
+  border: var(--stroke-fat);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+.my-picks__empty-title {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.my-picks__empty-sub {
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+.my-picks__link {
+  background: transparent;
+  border: none;
+  color: var(--pink);
+  font-weight: 800;
+  cursor: pointer;
+  text-decoration: underline;
+  font-family: inherit;
+  font-size: inherit;
+  padding: 0;
+}
+.my-picks__link:hover { color: var(--purple); }
+
+.my-picks__stats {
+  display: flex;
+  gap: 18px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin: 24px 0 18px;
+}
+
+.my-picks__hint {
+  text-align: center;
+  font-size: 13px;
+  color: var(--ink-mute);
+  font-style: italic;
+  margin-bottom: 20px;
+}
+
+.my-picks__list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.my-pick-card {
+  background: #fff;
+  border: var(--stroke-fat);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 14px 18px 18px;
+  position: relative;
+}
+
+.my-pick-card__tag {
+  display: inline-block;
+  background: var(--ink);
+  color: var(--yellow);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  margin-bottom: 10px;
 }
 
 /* Footer ────────────────────────────────────────────── */

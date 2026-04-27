@@ -50,12 +50,38 @@ function Star({ size = 30, color = '#ffd93d' }) {
    Top-level App
    ───────────────────────────────────────────────────────────── */
 
+const VALID_VIEWS = ['fixtures', 'leaderboard', 'mypicks'];
+
 export default function App() {
   const { user, loading: authLoading } = useAuth();
   const [profile, setProfile] = useState(null);
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [view, setView] = useState(() => {
+    const h = window.location.hash.replace('#', '');
+    return VALID_VIEWS.includes(h) ? h : 'fixtures';
+  });
+
+  useEffect(() => {
+    if (window.location.hash.replace('#', '') !== view) {
+      window.history.replaceState(null, '', `#${view}`);
+    }
+  }, [view]);
+
+  useEffect(() => {
+    function onHash() {
+      const h = window.location.hash.replace('#', '');
+      if (VALID_VIEWS.includes(h)) setView(h);
+    }
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+
+  function handleNav(next) {
+    setView(next);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
 
   useEffect(() => {
     if (!user) {
@@ -213,45 +239,64 @@ export default function App() {
 
   return (
     <Shell>
-      <BgDecor />
-      <Nav user={user} profile={profile} />
+      {view === 'fixtures' && <BgDecor />}
+      <Nav user={user} profile={profile} view={view} onNav={handleNav} />
 
-      <Hero
-        tournament={tournament}
-        signedIn={!!user}
-        yourRank={yourRank}
-        yourCorrect={yourCorrect}
-        yourPicks={yourPicks.length}
-        yourPoints={yourPoints}
-        vsModel={vsModel}
-      />
+      {view === 'fixtures' && (
+        <Hero
+          tournament={tournament}
+          signedIn={!!user}
+          yourRank={yourRank}
+          yourCorrect={yourCorrect}
+          yourPicks={yourPicks.length}
+          yourPoints={yourPoints}
+          vsModel={vsModel}
+          onNav={handleNav}
+        />
+      )}
 
       {!user && <AuthBlock />}
 
       <main className="main">
-        <Leaderboard predictions={predictions} currentUserId={user?.id} />
+        {view === 'fixtures' && (
+          <section className="groups-section">
+            <h2 className="section-h2">
+              <Leaf size={32} color="#6dba63" />
+              <span>The Garden of Fixtures</span>
+              <Leaf size={32} color="#6dba63" />
+            </h2>
 
-        <section className="groups-section">
-          <h2 className="section-h2">
-            <Leaf size={32} color="#6dba63" />
-            <span>The Garden of Fixtures</span>
-            <Leaf size={32} color="#6dba63" />
-          </h2>
+            <div className="groups">
+              {sortedGroupLabels.map((label, idx) => (
+                <GroupCard
+                  key={label}
+                  label={label}
+                  accent={accentCycle[idx % accentCycle.length]}
+                  teams={[...groups[label].teams.values()]}
+                  matches={groups[label].matches}
+                  user={user}
+                  onPredictionSaved={refreshUserPredictions}
+                />
+              ))}
+            </div>
+          </section>
+        )}
 
-          <div className="groups">
-            {sortedGroupLabels.map((label, idx) => (
-              <GroupCard
-                key={label}
-                label={label}
-                accent={accentCycle[idx % accentCycle.length]}
-                teams={[...groups[label].teams.values()]}
-                matches={groups[label].matches}
-                user={user}
-                onPredictionSaved={refreshUserPredictions}
-              />
-            ))}
-          </div>
-        </section>
+        {view === 'leaderboard' && (
+          <Leaderboard predictions={predictions} currentUserId={user?.id} />
+        )}
+
+        {view === 'mypicks' && (
+          <MyPicks
+            user={user}
+            predictions={predictions}
+            matches={matches}
+            entries={entries}
+            modelId={modelId}
+            onPredictionSaved={refreshUserPredictions}
+            onNav={handleNav}
+          />
+        )}
       </main>
 
       <Footer />
@@ -283,18 +328,27 @@ function BgDecor() {
    Nav (top pill bar)
    ───────────────────────────────────────────────────────────── */
 
-function Nav({ user, profile }) {
+function Nav({ user, profile, view, onNav }) {
   const initial = (profile?.display_name || user?.email || '?').slice(0, 1).toUpperCase();
+  const link = (id, label) => (
+    <button
+      type="button"
+      className={`nav__link ${view === id ? 'nav__link--active' : ''}`}
+      onClick={() => onNav(id)}
+    >
+      {label}
+    </button>
+  );
   return (
     <header className="nav">
-      <div className="nav__brand">
+      <button type="button" className="nav__brand" onClick={() => onNav('fixtures')}>
         <Flower size={36} c1="#ff6b9d" c2="#ffd93d" />
         <span className="nav__brand-text">Bloomcup</span>
-      </div>
+      </button>
       <nav className="nav__links">
-        <a className="nav__link nav__link--active">fixtures</a>
-        <a className="nav__link">leaderboard</a>
-        <a className="nav__link">my picks</a>
+        {link('fixtures', 'fixtures')}
+        {link('leaderboard', 'leaderboard')}
+        {link('mypicks', 'my picks')}
       </nav>
       <div className="nav__right">
         {user ? (
@@ -532,6 +586,114 @@ function Leaderboard({ predictions, currentUserId }) {
           {modelRow && ` · model has filed ${modelRow.picks} picks`}
         </p>
       )}
+    </section>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
+   My Picks tab
+   ───────────────────────────────────────────────────────────── */
+
+function MyPicks({ user, predictions, matches, entries, modelId, onPredictionSaved, onNav }) {
+  const heading = (
+    <h2 className="section-h2">
+      <Flower size={32} c1="#ff6b9d" c2="#ffd93d" />
+      <span>Your picks</span>
+      <Flower size={32} c1="#9d6bff" c2="#ffd93d" />
+    </h2>
+  );
+
+  if (!user) {
+    return (
+      <section className="my-picks">
+        {heading}
+        <div className="my-picks__empty">
+          <Star size={40} color="#ffd93d" />
+          <p className="my-picks__empty-title">Sign in to see your picks.</p>
+          <p className="my-picks__empty-sub">Use the sign-in card above.</p>
+        </div>
+      </section>
+    );
+  }
+
+  const entryById = Object.fromEntries(entries.map((e) => [e.id, e]));
+  const modelPredById = {};
+  const userPredById = {};
+  for (const p of predictions) {
+    if (p.user_id === modelId) modelPredById[p.match_id] = p;
+    if (p.user_id === user.id) userPredById[p.match_id] = p;
+  }
+
+  const yourMatchIds = new Set(Object.keys(userPredById));
+  const yourMatches = matches
+    .filter((m) => yourMatchIds.has(m.id))
+    .sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at))
+    .map((m) => ({
+      ...m,
+      home: entryById[m.home_entry_id],
+      away: entryById[m.away_entry_id],
+      modelPred: modelPredById[m.id],
+      userPred: userPredById[m.id],
+    }));
+
+  if (yourMatches.length === 0) {
+    return (
+      <section className="my-picks">
+        {heading}
+        <div className="my-picks__empty">
+          <Flower size={48} c1="#ff6b9d" c2="#ffd93d" />
+          <p className="my-picks__empty-title">No picks yet ✿</p>
+          <p className="my-picks__empty-sub">
+            Head to{' '}
+            <button type="button" className="my-picks__link" onClick={() => onNav('fixtures')}>
+              Fixtures
+            </button>{' '}
+            and call some matches.
+          </p>
+        </div>
+      </section>
+    );
+  }
+
+  const totalPoints = yourMatches.reduce((s, m) => s + (m.userPred?.points_awarded ?? 0), 0);
+  const correct = yourMatches.filter((m) => (m.userPred?.points_awarded ?? 0) > 0).length;
+  const matchedModel = yourMatches.filter((m) => {
+    const u = m.userPred?.predicted_outcome;
+    const md = m.modelPred?.predicted_outcome;
+    return u && md && u.home_score === md.home_score && u.away_score === md.away_score;
+  }).length;
+
+  return (
+    <section className="my-picks">
+      {heading}
+
+      <div className="my-picks__stats">
+        <Stat color="pink" rotate={-1} num={yourMatches.length} label="picks made" />
+        <Stat color="green" rotate={1} num={correct} label="correct" />
+        <Stat color="yellow" rotate={-1} num={totalPoints} label="points" />
+        <Stat color="purple" rotate={1} num={matchedModel} label="agree w/ bot" />
+      </div>
+
+      <p className="my-picks__hint">
+        tap any score to update — picks lock when the match starts.
+      </p>
+
+      <div className="my-picks__list">
+        {yourMatches.map((m) => {
+          const groupLabel = m.home?.group_label || 'KO';
+          return (
+            <div key={m.id} className="my-pick-card">
+              <div className="my-pick-card__tag">Group {groupLabel}</div>
+              <MatchRow
+                match={m}
+                accent="pink"
+                user={user}
+                onPredictionSaved={onPredictionSaved}
+              />
+            </div>
+          );
+        })}
+      </div>
     </section>
   );
 }
