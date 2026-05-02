@@ -1,6 +1,14 @@
 import { useEffect, useState } from 'react';
 import { supabase, isConfigured } from './lib/supabase.js';
 import { useAuth, ensureProfile, signInWithPassword, signUp, signOut } from './lib/auth.js';
+import {
+  createPool,
+  joinPoolBySlug,
+  leavePool,
+  deletePool,
+  fetchUserPools,
+  poolInviteUrl,
+} from './lib/pools.js';
 
 const TOURNAMENT_SLUG = 'wc-2026';
 
@@ -82,6 +90,92 @@ export default function App() {
     setView(next);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
+
+  const [userPools, setUserPools] = useState([]);
+  const [selectedPoolId, setSelectedPoolId] = useState(null);
+  const [joinNotice, setJoinNotice] = useState(null);
+  const [createPoolTrigger, setCreatePoolTrigger] = useState(0);
+
+  function startSweepstake() {
+    if (!user) {
+      document.getElementById('auth')?.scrollIntoView({ behavior: 'smooth' });
+      return;
+    }
+    setView('leaderboard');
+    setSelectedPoolId(null);
+    setCreatePoolTrigger((c) => c + 1);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  async function refreshUserPools() {
+    if (!user) {
+      setUserPools([]);
+      return;
+    }
+    try {
+      const list = await fetchUserPools(user.id);
+      setUserPools(list);
+    } catch (err) {
+      console.error('fetchUserPools failed', err);
+    }
+  }
+
+  useEffect(() => {
+    refreshUserPools();
+  }, [user?.id]);
+
+  // ?join=slug — join a pool by invite link, then strip the query param.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const slug = params.get('join');
+    if (!slug) return;
+
+    if (!user) {
+      sessionStorage.setItem('pendingJoin', slug);
+      return;
+    }
+
+    (async () => {
+      try {
+        const pool = await joinPoolBySlug(slug, user.id);
+        await refreshUserPools();
+        setSelectedPoolId(pool.id);
+        setView('leaderboard');
+        setJoinNotice(`✓ Joined pool: ${pool.name}`);
+        setTimeout(() => setJoinNotice(null), 4000);
+      } catch (err) {
+        setJoinNotice(`⚠ Couldn't join pool: ${err.message}`);
+        setTimeout(() => setJoinNotice(null), 5000);
+      } finally {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('join');
+        window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+        sessionStorage.removeItem('pendingJoin');
+      }
+    })();
+  }, [user?.id]);
+
+  // After sign-in, process any pending join from sessionStorage
+  useEffect(() => {
+    if (!user) return;
+    const slug = sessionStorage.getItem('pendingJoin');
+    if (!slug) return;
+    (async () => {
+      try {
+        const pool = await joinPoolBySlug(slug, user.id);
+        await refreshUserPools();
+        setSelectedPoolId(pool.id);
+        setView('leaderboard');
+        setJoinNotice(`✓ Joined pool: ${pool.name}`);
+        setTimeout(() => setJoinNotice(null), 4000);
+      } catch (err) {
+        setJoinNotice(`⚠ Couldn't join pool: ${err.message}`);
+        setTimeout(() => setJoinNotice(null), 5000);
+      } finally {
+        sessionStorage.removeItem('pendingJoin');
+      }
+    })();
+  }, [user?.id]);
 
   useEffect(() => {
     if (!user) {
@@ -255,6 +349,7 @@ export default function App() {
     <Shell>
       {view === 'fixtures' && <BgDecor />}
       <Nav user={user} profile={profile} view={view} onNav={handleNav} />
+      {joinNotice && <div className="join-notice">{joinNotice}</div>}
 
       {view === 'fixtures' && (
         <Hero
@@ -268,6 +363,7 @@ export default function App() {
           unpickedCount={unpickedCount}
           firstUnpickedGroup={firstUnpickedGroup}
           onNav={handleNav}
+          onStartSweepstake={startSweepstake}
         />
       )}
 
@@ -299,7 +395,20 @@ export default function App() {
         )}
 
         {view === 'leaderboard' && (
-          <Leaderboard predictions={predictions} currentUserId={user?.id} />
+          <LeaderboardView
+            predictions={predictions}
+            currentUserId={user?.id}
+            modelId={modelId}
+            user={user}
+            tournamentId={tournament.id}
+            matches={matches}
+            entries={entries}
+            userPools={userPools}
+            selectedPoolId={selectedPoolId}
+            onSelectPool={setSelectedPoolId}
+            onPoolsChange={refreshUserPools}
+            createTrigger={createPoolTrigger}
+          />
         )}
 
         {view === 'mypicks' && (
@@ -315,7 +424,13 @@ export default function App() {
         )}
 
         {view === 'settings' && (
-          <Settings user={user} profile={profile} setProfile={setProfile} />
+          <Settings
+            user={user}
+            profile={profile}
+            setProfile={setProfile}
+            userPools={userPools}
+            onPoolsChange={refreshUserPools}
+          />
         )}
       </main>
 
@@ -399,7 +514,7 @@ function Nav({ user, profile, view, onNav }) {
 
 function Hero({
   tournament, signedIn, yourRank, yourCorrect, yourPicks, yourPoints, vsModel,
-  unpickedCount, firstUnpickedGroup, onNav,
+  unpickedCount, firstUnpickedGroup, onNav, onStartSweepstake,
 }) {
   const daysToKickoff = (() => {
     if (!tournament?.start_date) return null;
@@ -463,7 +578,13 @@ function Hero({
           <span>{ctaContent.label}</span>
           <span className="big-btn__shine">{ctaContent.shine}</span>
         </button>
-        <span className="hero__cta-decor"><Leaf size={50} color="#6dba63" /></span>
+      </div>
+
+      <div className="hero__cta-row hero__cta-row--secondary">
+        <button type="button" onClick={onStartSweepstake} className="big-btn big-btn--ghost">
+          <span>Set up a sweepstakes</span>
+          <span className="big-btn__shine big-btn__shine--purple">friends / work ✿</span>
+        </button>
       </div>
 
       {signedIn && (
@@ -570,7 +691,7 @@ function AuthBlock() {
    Leaderboard
    ───────────────────────────────────────────────────────────── */
 
-function Leaderboard({ predictions, currentUserId }) {
+function Leaderboard({ predictions, currentUserId, scopeName = null }) {
   const byUser = new Map();
   for (const p of predictions) {
     if (!p.profile) continue;
@@ -595,7 +716,7 @@ function Leaderboard({ predictions, currentUserId }) {
     <section className="lb-section">
       <h2 className="section-h2">
         <Star size={32} color="#ffd93d" />
-        <span>The Garden Standings</span>
+        <span>{scopeName ? scopeName : 'The Garden Standings'}</span>
         <Flower size={32} c1="#ff6b9d" c2="#ffd93d" />
       </h2>
 
@@ -638,6 +759,401 @@ function Leaderboard({ predictions, currentUserId }) {
           points start tallying once matches finish (kickoff June 11).
           {playerCount > 0 && ` · ${playerCount} ${playerCount === 1 ? 'player' : 'players'}`}
           {modelRow && ` · model has filed ${modelRow.picks} picks`}
+        </p>
+      )}
+    </section>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Leaderboard tab — wraps Leaderboard with pool selector + create
+   ───────────────────────────────────────────────────────────── */
+
+function LeaderboardView({
+  predictions, currentUserId, modelId, user, tournamentId, matches, entries,
+  userPools, selectedPoolId, onSelectPool, onPoolsChange, createTrigger,
+}) {
+  const selectedPool = userPools.find((p) => p.id === selectedPoolId) || null;
+
+  let scoped = predictions;
+  if (selectedPool) {
+    const allowed = new Set([...selectedPool.members, modelId].filter(Boolean));
+    scoped = predictions.filter((p) => allowed.has(p.user_id));
+  }
+
+  return (
+    <div className="leaderboard-view">
+      {user && (
+        <PoolBar
+          user={user}
+          tournamentId={tournamentId}
+          userPools={userPools}
+          selectedPoolId={selectedPoolId}
+          onSelectPool={onSelectPool}
+          onPoolsChange={onPoolsChange}
+          createTrigger={createTrigger}
+        />
+      )}
+      {selectedPool?.type === 'sweepstake' ? (
+        <SweepstakeBoard
+          pool={selectedPool}
+          matches={matches}
+          entries={entries}
+          currentUserId={currentUserId}
+          predictions={predictions}
+        />
+      ) : (
+        <Leaderboard
+          predictions={scoped}
+          currentUserId={currentUserId}
+          scopeName={selectedPool ? selectedPool.name : null}
+        />
+      )}
+      {selectedPool && (
+        <InviteStrip
+          pool={selectedPool}
+          isOwner={selectedPool.owner_id === currentUserId}
+          onDelete={async () => {
+            if (!confirm(`Delete pool "${selectedPool.name}"? This removes it for everyone.`)) return;
+            try {
+              await deletePool(selectedPool.id);
+              onSelectPool(null);
+              await onPoolsChange();
+            } catch (err) {
+              alert(err.message);
+            }
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function PoolBar({
+  user, tournamentId, userPools, selectedPoolId, onSelectPool, onPoolsChange, createTrigger,
+}) {
+  const [creating, setCreating] = useState(false);
+
+  useEffect(() => {
+    if (createTrigger > 0) setCreating(true);
+  }, [createTrigger]);
+
+  return (
+    <div className="pool-bar">
+      <div className="pool-bar__pills">
+        <button
+          type="button"
+          className={`pool-pill ${selectedPoolId === null ? 'pool-pill--active' : ''}`}
+          onClick={() => onSelectPool(null)}
+        >
+          🌍 Global
+        </button>
+        {userPools.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            className={`pool-pill ${selectedPoolId === p.id ? 'pool-pill--active' : ''}`}
+            onClick={() => onSelectPool(p.id)}
+          >
+            {p.type === 'sweepstake' ? '★' : '✿'} {p.name}
+            <span className="pool-pill__count">{p.members.length}</span>
+          </button>
+        ))}
+        <button
+          type="button"
+          className="pool-pill pool-pill--add"
+          onClick={() => setCreating((v) => !v)}
+        >
+          + new pool
+        </button>
+      </div>
+
+      {creating && (
+        <CreatePoolForm
+          user={user}
+          tournamentId={tournamentId}
+          onCancel={() => setCreating(false)}
+          onCreated={async (pool) => {
+            setCreating(false);
+            await onPoolsChange();
+            onSelectPool(pool.id);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function CreatePoolForm({ user, tournamentId, onCreated, onCancel }) {
+  const [name, setName] = useState('');
+  const [type, setType] = useState('pickem');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  async function submit(e) {
+    e.preventDefault();
+    if (!name.trim() || busy) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const pool = await createPool({
+        tournamentId,
+        ownerId: user.id,
+        name,
+        type,
+      });
+      onCreated(pool);
+    } catch (e2) {
+      setErr(e2.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="pool-create">
+      <input
+        type="text"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="pool name (e.g. Office Cup 2026)"
+        maxLength={60}
+        autoFocus
+      />
+
+      <div className="pool-create__type">
+        <label className={`pool-type-pill ${type === 'pickem' ? 'pool-type-pill--active' : ''}`}>
+          <input
+            type="radio"
+            name="pool-type"
+            value="pickem"
+            checked={type === 'pickem'}
+            onChange={() => setType('pickem')}
+          />
+          <span className="pool-type-pill__label">
+            <strong>Pick'em</strong>
+            <small>predict every match</small>
+          </span>
+        </label>
+        <label className={`pool-type-pill ${type === 'sweepstake' ? 'pool-type-pill--active' : ''}`}>
+          <input
+            type="radio"
+            name="pool-type"
+            value="sweepstake"
+            checked={type === 'sweepstake'}
+            onChange={() => setType('sweepstake')}
+          />
+          <span className="pool-type-pill__label">
+            <strong>Sweepstake</strong>
+            <small>draw a country, follow it</small>
+          </span>
+        </label>
+      </div>
+
+      <div className="pool-create__actions">
+        <button
+          type="submit"
+          disabled={!name.trim() || busy}
+          className="settings-btn settings-btn--primary"
+        >
+          {busy ? '…' : 'create'}
+        </button>
+        <button type="button" onClick={onCancel} className="link-btn">cancel</button>
+      </div>
+      {err && <span className="auth-error">⚠ {err}</span>}
+    </form>
+  );
+}
+
+function InviteStrip({ pool, isOwner, onDelete }) {
+  const [copied, setCopied] = useState(false);
+  const url = poolInviteUrl(pool.slug);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      window.prompt('Copy this invite link:', url);
+    }
+  }
+
+  return (
+    <div className="invite-strip">
+      <Star size={22} color="#ffd93d" />
+      <div className="invite-strip__text">
+        <strong>Invite friends to "{pool.name}"</strong>
+        <code>{url}</code>
+      </div>
+      <div className="invite-strip__actions">
+        <button type="button" onClick={copy} className="settings-btn settings-btn--primary">
+          {copied ? '✓ copied' : 'copy link'}
+        </button>
+        {isOwner && (
+          <button type="button" onClick={onDelete} className="link-btn link-btn--danger">
+            delete pool
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Sweepstake leaderboard (one country per member, ranked by progress)
+   ───────────────────────────────────────────────────────────── */
+
+const STAGE_BONUS = {
+  round_of_16: 5,
+  quarter_final: 10,
+  semi_final: 15,
+  third_place: 5,
+  final: 20,
+};
+const CHAMPION_BONUS = 25;
+const STAGE_ORDER = ['group', 'round_of_16', 'quarter_final', 'semi_final', 'final', 'champion'];
+const STAGE_LABEL = {
+  group: 'group stage',
+  round_of_16: 'round of 16',
+  quarter_final: 'quarter-final',
+  semi_final: 'semi-final',
+  final: 'final',
+  champion: 'champion',
+};
+
+function calcSweepstakeStanding(team, matches, entries) {
+  const teamEntry = entries.find((e) => e.team?.id === team.id);
+  if (!teamEntry) return { points: 0, played: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, stage: 'group' };
+
+  const ours = matches.filter(
+    (m) => m.home_entry_id === teamEntry.id || m.away_entry_id === teamEntry.id,
+  );
+  const finished = ours.filter((m) => m.status === 'finished' && m.result);
+
+  let points = 0, w = 0, d = 0, l = 0, gf = 0, ga = 0;
+  let stage = 'group';
+  for (const m of finished) {
+    const isHome = m.home_entry_id === teamEntry.id;
+    const our = isHome ? m.result.home_score : m.result.away_score;
+    const their = isHome ? m.result.away_score : m.result.home_score;
+    gf += our;
+    ga += their;
+    if (m.stage === 'group') {
+      if (our > their) { w++; points += 3; }
+      else if (our === their) { d++; points += 1; }
+      else { l++; }
+    } else {
+      points += STAGE_BONUS[m.stage] || 0;
+      if (our > their) {
+        if (m.stage === 'final') {
+          points += CHAMPION_BONUS;
+          stage = 'champion';
+        } else {
+          const idx = STAGE_ORDER.indexOf(m.stage);
+          stage = STAGE_ORDER[Math.min(idx + 1, STAGE_ORDER.length - 1)];
+        }
+      } else if (our < their) {
+        // eliminated
+      }
+    }
+  }
+  // For unplayed knockouts where they're scheduled, they at least reached that round
+  for (const m of ours.filter((m) => m.stage !== 'group' && m.status !== 'finished')) {
+    const idx = STAGE_ORDER.indexOf(m.stage);
+    if (idx > STAGE_ORDER.indexOf(stage)) stage = m.stage;
+  }
+  return { points, played: finished.length, w, d, l, gf, ga, stage };
+}
+
+function SweepstakeBoard({ pool, matches, entries, currentUserId, predictions }) {
+  // Build a map: user_id -> profile (from any prediction or pool members later)
+  const profileByUserId = {};
+  for (const p of predictions) {
+    if (p.profile && !profileByUserId[p.user_id]) profileByUserId[p.user_id] = p.profile;
+  }
+
+  const rows = (pool.assignments || []).map((a) => {
+    const profile = profileByUserId[a.user_id] || { display_name: '(anon)', is_model: false };
+    const standing = calcSweepstakeStanding(a.team, matches, entries);
+    return { user_id: a.user_id, profile, team: a.team, ...standing };
+  });
+
+  rows.sort((a, b) => {
+    if (b.points !== a.points) return b.points - a.points;
+    const stageRankA = STAGE_ORDER.indexOf(a.stage);
+    const stageRankB = STAGE_ORDER.indexOf(b.stage);
+    if (stageRankB !== stageRankA) return stageRankB - stageRankA;
+    return (b.gf - b.ga) - (a.gf - a.ga);
+  });
+
+  const youRow = rows.find((r) => r.user_id === currentUserId);
+  const anyPoints = rows.some((r) => r.points > 0);
+
+  return (
+    <section className="sweep-board">
+      <h2 className="section-h2">
+        <Star size={32} color="#ffd93d" />
+        <span>{pool.name}</span>
+        <Flower size={32} c1="#9d6bff" c2="#ffd93d" />
+      </h2>
+
+      {youRow && (
+        <div className="sweep-yours">
+          <span className="sweep-yours__label">You drew</span>
+          <span className="sweep-yours__team">{youRow.team?.name || 'TBD'}</span>
+          <span className="sweep-yours__sub">
+            {anyPoints ? `${youRow.points} pts · ${STAGE_LABEL[youRow.stage]}` : 'tournament starts June 11'}
+          </span>
+        </div>
+      )}
+
+      <div className="sweep-card">
+        {rows.length === 0 ? (
+          <p className="lb-empty">no draws yet — invite friends to claim teams.</p>
+        ) : (
+          rows.map((r, i) => {
+            const isYou = r.user_id === currentUserId;
+            const rankClass = i === 0 ? 'gold' : i === 1 ? 'pink' : i === 2 ? 'green' : 'plain';
+            return (
+              <div key={r.user_id} className={`sweep-row ${isYou ? 'sweep-row--you' : ''}`}>
+                <div className={`lb-rank lb-rank--${rankClass}`}>{i + 1}</div>
+                <div className="sweep-row__main">
+                  <div className="sweep-row__player">
+                    {r.profile.display_name}
+                    {isYou && <span className="lb-name__you">YOU</span>}
+                  </div>
+                  <div className="sweep-row__team">
+                    {r.team?.code && <span className="sweep-row__code">{r.team.code}</span>}
+                    {r.team?.name || 'TBD'}
+                  </div>
+                </div>
+                <div className="sweep-row__stats">
+                  {anyPoints ? (
+                    <>
+                      <span className="sweep-row__line">
+                        {r.w}W · {r.d}D · {r.l}L · GD {r.gf - r.ga > 0 ? '+' : ''}{r.gf - r.ga}
+                      </span>
+                      <span className="sweep-row__stage">{STAGE_LABEL[r.stage]}</span>
+                    </>
+                  ) : (
+                    <span className="sweep-row__line sweep-row__line--mute">awaiting kickoff</span>
+                  )}
+                </div>
+                <div className="lb-pts">
+                  {anyPoints ? r.points : '—'}
+                  <span className="lb-pts__sm">pts</span>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {!anyPoints && rows.length > 0 && (
+        <p className="lb-note">
+          scoring kicks off when matches do (June 11). · group win 3pts · draw 1pt
+          · reach R16 +5 · QF +10 · SF +15 · final +20 · champion +25
         </p>
       )}
     </section>
@@ -756,7 +1272,7 @@ function MyPicks({ user, predictions, matches, entries, modelId, onPredictionSav
    Settings tab
    ───────────────────────────────────────────────────────────── */
 
-function Settings({ user, profile, setProfile }) {
+function Settings({ user, profile, setProfile, userPools, onPoolsChange }) {
   const heading = (
     <h2 className="section-h2">
       <Flower size={32} c1="#9d6bff" c2="#ffd93d" />
@@ -783,6 +1299,7 @@ function Settings({ user, profile, setProfile }) {
       {heading}
       <div className="settings-stack">
         <DisplayNameCard user={user} profile={profile} setProfile={setProfile} />
+        <PoolsCard user={user} userPools={userPools} onPoolsChange={onPoolsChange} />
         <AccountCard user={user} />
       </div>
     </section>
@@ -846,6 +1363,120 @@ function DisplayNameCard({ user, profile, setProfile }) {
         </button>
       </form>
       {err && <p className="settings-error">⚠ {err}</p>}
+    </div>
+  );
+}
+
+function PoolsCard({ user, userPools, onPoolsChange }) {
+  const [busyId, setBusyId] = useState(null);
+  const [copiedId, setCopiedId] = useState(null);
+
+  async function copy(slug, id) {
+    const url = poolInviteUrl(slug);
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 1800);
+    } catch {
+      window.prompt('Copy this invite link:', url);
+    }
+  }
+
+  async function handleLeave(pool) {
+    if (!confirm(`Leave "${pool.name}"?`)) return;
+    setBusyId(pool.id);
+    try {
+      await leavePool(pool.id, user.id);
+      await onPoolsChange();
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleDelete(pool) {
+    if (!confirm(`Delete "${pool.name}"? This removes it for everyone.`)) return;
+    setBusyId(pool.id);
+    try {
+      await deletePool(pool.id);
+      await onPoolsChange();
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <div className="settings-card">
+      <h3 className="settings-card__title">Your pools</h3>
+      <p className="settings-card__sub">
+        private leaderboards. share the invite link to bring friends in.
+      </p>
+      {userPools.length === 0 ? (
+        <p className="pools-empty">
+          you're not in any pools yet. create one from the leaderboard tab.
+        </p>
+      ) : (
+        <ul className="pools-list">
+          {userPools.map((pool) => {
+            const isOwner = pool.owner_id === user.id;
+            return (
+              <li key={pool.id} className="pools-row">
+                <div className="pools-row__main">
+                  <strong>
+                    {pool.name}
+                    <span className={`pools-row__type pools-row__type--${pool.type}`}>
+                      {pool.type === 'sweepstake' ? '✿ sweepstake' : 'pick\'em'}
+                    </span>
+                  </strong>
+                  <span className="pools-row__meta">
+                    {pool.members.length} {pool.members.length === 1 ? 'member' : 'members'}
+                    {isOwner && ' · owner'}
+                  </span>
+                  {pool.type === 'sweepstake' && (() => {
+                    const mine = pool.assignments?.find((a) => a.user_id === user.id);
+                    return mine?.team ? (
+                      <span className="pools-row__draw">
+                        you drew: <strong>{mine.team.name}</strong>
+                      </span>
+                    ) : null;
+                  })()}
+                </div>
+                <div className="pools-row__actions">
+                  <button
+                    type="button"
+                    className="link-btn"
+                    onClick={() => copy(pool.slug, pool.id)}
+                  >
+                    {copiedId === pool.id ? '✓ copied' : 'copy invite'}
+                  </button>
+                  {isOwner ? (
+                    <button
+                      type="button"
+                      className="link-btn link-btn--danger"
+                      disabled={busyId === pool.id}
+                      onClick={() => handleDelete(pool)}
+                    >
+                      delete
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="link-btn link-btn--danger"
+                      disabled={busyId === pool.id}
+                      onClick={() => handleLeave(pool)}
+                    >
+                      leave
+                    </button>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }
