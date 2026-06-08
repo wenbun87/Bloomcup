@@ -430,6 +430,7 @@ export default function App() {
             setProfile={setProfile}
             userPools={userPools}
             onPoolsChange={refreshUserPools}
+            onProfileSaved={refreshUserPredictions}
           />
         )}
       </main>
@@ -1272,7 +1273,7 @@ function MyPicks({ user, predictions, matches, entries, modelId, onPredictionSav
    Settings tab
    ───────────────────────────────────────────────────────────── */
 
-function Settings({ user, profile, setProfile, userPools, onPoolsChange }) {
+function Settings({ user, profile, setProfile, userPools, onPoolsChange, onProfileSaved }) {
   const heading = (
     <h2 className="section-h2">
       <Flower size={32} c1="#9d6bff" c2="#ffd93d" />
@@ -1298,7 +1299,12 @@ function Settings({ user, profile, setProfile, userPools, onPoolsChange }) {
     <section className="settings">
       {heading}
       <div className="settings-stack">
-        <DisplayNameCard user={user} profile={profile} setProfile={setProfile} />
+        <DisplayNameCard
+          user={user}
+          profile={profile}
+          setProfile={setProfile}
+          onSaved={onProfileSaved}
+        />
         <PoolsCard user={user} userPools={userPools} onPoolsChange={onPoolsChange} />
         <AccountCard user={user} />
       </div>
@@ -1306,7 +1312,7 @@ function Settings({ user, profile, setProfile, userPools, onPoolsChange }) {
   );
 }
 
-function DisplayNameCard({ user, profile, setProfile }) {
+function DisplayNameCard({ user, profile, setProfile, onSaved }) {
   const [name, setName] = useState(profile?.display_name || '');
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState(false);
@@ -1332,6 +1338,7 @@ function DisplayNameCard({ user, profile, setProfile }) {
         .single();
       if (error) throw error;
       setProfile(data);
+      await onSaved?.();
       setFlash(true);
       setTimeout(() => setFlash(false), 1500);
     } catch (e2) {
