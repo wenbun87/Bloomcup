@@ -4,6 +4,7 @@ import { supabase } from './supabase.js';
 export function useAuth() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [recovery, setRecovery] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -14,8 +15,10 @@ export function useAuth() {
       setLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (mounted) setUser(session?.user ?? null);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!mounted) return;
+      setUser(session?.user ?? null);
+      if (event === 'PASSWORD_RECOVERY') setRecovery(true);
     });
 
     return () => {
@@ -24,7 +27,7 @@ export function useAuth() {
     };
   }, []);
 
-  return { user, loading };
+  return { user, loading, recovery, clearRecovery: () => setRecovery(false) };
 }
 
 export async function ensureProfile(user) {
@@ -55,6 +58,16 @@ export function signUp(email, password) {
     password,
     options: { emailRedirectTo: window.location.origin },
   });
+}
+
+export function sendPasswordReset(email) {
+  return supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin,
+  });
+}
+
+export function updatePassword(newPassword) {
+  return supabase.auth.updateUser({ password: newPassword });
 }
 
 export function signOut() {

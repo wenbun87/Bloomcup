@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { supabase, isConfigured } from './lib/supabase.js';
-import { useAuth, ensureProfile, signInWithPassword, signUp, signOut } from './lib/auth.js';
+import {
+  useAuth, ensureProfile, signInWithPassword, signUp, signOut,
+  sendPasswordReset, updatePassword,
+} from './lib/auth.js';
 import {
   createPool,
   joinPoolBySlug,
@@ -61,7 +64,7 @@ function Star({ size = 30, color = '#ffd93d' }) {
 const VALID_VIEWS = ['fixtures', 'leaderboard', 'mypicks', 'settings'];
 
 export default function App() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, recovery, clearRecovery } = useAuth();
   const [profile, setProfile] = useState(null);
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
@@ -263,6 +266,14 @@ export default function App() {
     });
   }
 
+  if (recovery) {
+    return (
+      <Shell>
+        <Nav user={user} profile={profile} view="settings" onNav={() => {}} />
+        <ResetPasswordScreen onDone={clearRecovery} />
+      </Shell>
+    );
+  }
   if (loading || authLoading) {
     return (
       <Shell>
@@ -617,12 +628,18 @@ function Stat({ color, rotate, num, label }) {
    ───────────────────────────────────────────────────────────── */
 
 function AuthBlock() {
-  const [mode, setMode] = useState('signin');
+  const [mode, setMode] = useState('signin'); // 'signin' | 'signup' | 'forgot'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const [info, setInfo] = useState(null);
+
+  function switchMode(next) {
+    setMode(next);
+    setErr(null);
+    setInfo(null);
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -633,12 +650,16 @@ function AuthBlock() {
       if (mode === 'signin') {
         const { error } = await signInWithPassword(email, password);
         if (error) throw error;
-      } else {
+      } else if (mode === 'signup') {
         const { data, error } = await signUp(email, password);
         if (error) throw error;
         if (data.user && !data.session) {
           setInfo(`check your email (${email}) to confirm, then sign in.`);
         }
+      } else {
+        const { error } = await sendPasswordReset(email);
+        if (error) throw error;
+        setInfo(`if an account exists for ${email}, a reset link is on its way. check your inbox.`);
       }
     } catch (e2) {
       setErr(e2.message);
@@ -647,12 +668,17 @@ function AuthBlock() {
     }
   }
 
+  const head =
+    mode === 'signin' ? 'Sign in to play'
+    : mode === 'signup' ? 'Create an account'
+    : 'Reset your password';
+
   return (
     <section className="auth-block" id="auth">
       <div className="auth-card">
         <div className="auth-card__head">
           <Flower size={28} c1="#ff6b9d" c2="#ffd93d" />
-          <span>{mode === 'signin' ? 'Sign in to play' : 'Create an account'}</span>
+          <span>{head}</span>
         </div>
         <form onSubmit={handleSubmit} className="auth-form">
           <input
@@ -660,29 +686,120 @@ function AuthBlock() {
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@example.com"
           />
+          {mode !== 'forgot' && (
+            <input
+              type="password" required minLength={6} value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="password"
+            />
+          )}
+          <button disabled={busy} className="auth-form__submit">
+            {busy ? '…'
+              : mode === 'signin' ? 'sign in →'
+              : mode === 'signup' ? 'sign up →'
+              : 'send reset link →'}
+          </button>
+        </form>
+
+        {mode === 'signin' && (
+          <button type="button" className="auth-card__forgot" onClick={() => switchMode('forgot')}>
+            forgot your password?
+          </button>
+        )}
+
+        <button
+          type="button" className="auth-card__switch"
+          onClick={() => switchMode(mode === 'signup' ? 'signin' : mode === 'forgot' ? 'signin' : 'signup')}
+        >
+          {mode === 'signin' ? "don't have an account? sign up"
+            : mode === 'signup' ? 'have an account? sign in'
+            : '← back to sign in'}
+        </button>
+
+        {mode !== 'forgot' && (
+          <div className="auth-card__tip">
+            <Star size={18} color="#ffd93d" />
+            <span>
+              already use <strong>bloomgarden</strong>? sign in with the same email + password.
+            </span>
+          </div>
+        )}
+        {err && <div className="status status--error">⚠ {err}</div>}
+        {info && <div className="status status--ok">✓ {info}</div>}
+      </div>
+    </section>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Reset password screen (shown when arriving via a recovery link)
+   ───────────────────────────────────────────────────────────── */
+
+function ResetPasswordScreen({ onDone }) {
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const [done, setDone] = useState(false);
+
+  async function submit(e) {
+    e.preventDefault();
+    setErr(null);
+    if (password.length < 6) { setErr('password must be at least 6 characters.'); return; }
+    if (password !== confirm) { setErr('passwords don\'t match.'); return; }
+    setBusy(true);
+    try {
+      const { error } = await updatePassword(password);
+      if (error) throw error;
+      setDone(true);
+    } catch (e2) {
+      setErr(e2.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (done) {
+    return (
+      <section className="auth-block">
+        <div className="auth-card">
+          <div className="auth-card__head">
+            <Flower size={28} c1="#6dba63" c2="#ffd93d" />
+            <span>Password updated</span>
+          </div>
+          <p className="reset-done">You're all set and signed in. ✿</p>
+          <button type="button" className="auth-form__submit" onClick={onDone}>
+            go to bloomcup →
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="auth-block">
+      <div className="auth-card">
+        <div className="auth-card__head">
+          <Flower size={28} c1="#ff6b9d" c2="#ffd93d" />
+          <span>Choose a new password</span>
+        </div>
+        <form onSubmit={submit} className="auth-form">
           <input
             type="password" required minLength={6} value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="password"
+            placeholder="new password"
+            autoFocus
+          />
+          <input
+            type="password" required minLength={6} value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            placeholder="confirm new password"
           />
           <button disabled={busy} className="auth-form__submit">
-            {busy ? '…' : mode === 'signin' ? 'sign in →' : 'sign up →'}
+            {busy ? '…' : 'update password →'}
           </button>
         </form>
-        <button
-          type="button" className="auth-card__switch"
-          onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setErr(null); setInfo(null); }}
-        >
-          {mode === 'signin' ? "don't have an account? sign up" : 'have an account? sign in'}
-        </button>
-        <div className="auth-card__tip">
-          <Star size={18} color="#ffd93d" />
-          <span>
-            already use <strong>bloomgarden</strong>? sign in with the same email + password.
-          </span>
-        </div>
         {err && <div className="status status--error">⚠ {err}</div>}
-        {info && <div className="status status--ok">✓ {info}</div>}
       </div>
     </section>
   );
