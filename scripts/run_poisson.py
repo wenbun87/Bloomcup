@@ -59,12 +59,28 @@ def predict(home_elo, away_elo, home_is_host):
     p_draw = float((home_goals == away_goals).mean())
     p_away = float((home_goals < away_goals).mean())
 
-    score_counts = Counter(zip(home_goals.tolist(), away_goals.tolist()))
-    modal_home, modal_away = score_counts.most_common(1)[0][0]
+    # Predicted scoreline: pick the most likely OUTCOME (home/draw/away),
+    # then the most common exact scoreline *within that outcome*. Taking the
+    # global modal score collapses almost every game to 1-1, because for two
+    # low-mean Poissons the single most common joint score is (1,1) even when
+    # one side is clearly favoured. Conditioning on the outcome makes the
+    # favourite show a winning scoreline and gives realistic variety.
+    if p_home >= p_draw and p_home >= p_away:
+        mask = home_goals > away_goals
+    elif p_away >= p_home and p_away >= p_draw:
+        mask = home_goals < away_goals
+    else:
+        mask = home_goals == away_goals
+
+    if mask.any():
+        score_counts = Counter(zip(home_goals[mask].tolist(), away_goals[mask].tolist()))
+    else:
+        score_counts = Counter(zip(home_goals.tolist(), away_goals.tolist()))
+    pred_home, pred_away = score_counts.most_common(1)[0][0]
 
     return {
-        'home_score': int(modal_home),
-        'away_score': int(modal_away),
+        'home_score': int(pred_home),
+        'away_score': int(pred_away),
         'p_home_win': round(p_home, 4),
         'p_draw': round(p_draw, 4),
         'p_away_win': round(p_away, 4),

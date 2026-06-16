@@ -106,15 +106,26 @@ def main():
                 'sport_id': sport_id,
                 'name': t.get('name') or t.get('shortName') or f'Team {fd_id}',
                 'code': t.get('tla'),
-                'metadata': {'football_data_id': fd_id},
+                'football_data_id': fd_id,
             }
             group = m.get('group')
             if group and m.get('stage') == 'GROUP_STAGE':
                 group_by_fd[fd_id] = group.replace('GROUP_', '').replace('Group ', '').strip()
     print(f'found {len(teams_by_fd)} teams')
 
+    # Existing metadata so we can MERGE (never overwrite) — otherwise the
+    # elo set by seed_elo.py / update_elo.py would be wiped on every run.
+    existing_teams = sb.table('teams').select('name, metadata').eq('sport_id', sport_id).execute().data
+    meta_by_name = {t['name']: (t.get('metadata') or {}) for t in existing_teams}
+
     team_id_by_fd = {}
     for fd_id, team in teams_by_fd.items():
+        name = team['name']
+        merged_meta = {
+            **meta_by_name.get(name, {}),
+            'football_data_id': team.pop('football_data_id'),
+        }
+        team['metadata'] = merged_meta
         result = sb.table('teams').upsert(team, on_conflict='sport_id,name').execute()
         team_id_by_fd[fd_id] = result.data[0]['id']
 
