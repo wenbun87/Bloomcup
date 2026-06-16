@@ -14,6 +14,13 @@ if (!url || !anonKey) {
 // "Exposed schemas" in the Supabase dashboard (Settings → API).
 export const supabase = createClient(url ?? '', anonKey ?? '', {
   db: { schema: 'prediction_lab' },
+  auth: {
+    // Read auth tokens (incl. password-recovery) from the URL on load,
+    // persist the session, and refresh it automatically.
+    detectSessionInUrl: true,
+    persistSession: true,
+    autoRefreshToken: true,
+  },
 });
 
 export const isConfigured = Boolean(url && anonKey);

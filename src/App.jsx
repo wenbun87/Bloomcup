@@ -63,6 +63,14 @@ function Star({ size = 30, color = '#ffd93d' }) {
 
 const VALID_VIEWS = ['fixtures', 'leaderboard', 'mypicks', 'settings'];
 
+// True when the URL hash carries a Supabase auth callback token
+// (e.g. #access_token=...&type=recovery). While present, the hash
+// router must leave the URL alone so Supabase can consume the token.
+function isAuthCallbackHash() {
+  const h = window.location.hash || '';
+  return h.includes('access_token=') || h.includes('type=recovery') || h.includes('error=');
+}
+
 export default function App() {
   const { user, loading: authLoading, recovery, clearRecovery } = useAuth();
   const [profile, setProfile] = useState(null);
@@ -75,6 +83,10 @@ export default function App() {
   });
 
   useEffect(() => {
+    // Don't rewrite the hash while Supabase still needs to read an auth
+    // callback token from it (password recovery / email confirm), or we'd
+    // wipe the token before the session is established.
+    if (isAuthCallbackHash()) return;
     if (window.location.hash.replace('#', '') !== view) {
       window.history.replaceState(null, '', `#${view}`);
     }
@@ -82,6 +94,7 @@ export default function App() {
 
   useEffect(() => {
     function onHash() {
+      if (isAuthCallbackHash()) return;
       const h = window.location.hash.replace('#', '');
       if (VALID_VIEWS.includes(h)) setView(h);
     }
