@@ -571,6 +571,63 @@ a { color: inherit; text-decoration: none; cursor: pointer; }
   gap: 22px;
 }
 
+/* Fixtures controls (layout toggle + date filter) ───── */
+
+.fix-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+.fix-controls__group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Fixtures by date ──────────────────────────────────── */
+
+.fix-days {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  max-width: 640px;
+  margin: 0 auto;
+}
+.fix-day { display: flex; flex-direction: column; gap: 12px; }
+.fix-day__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 6px;
+  border-bottom: var(--dashed);
+}
+.fix-day__label {
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+}
+.fix-day__count {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  margin-left: auto;
+}
+.fix-day__list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.fix-day__list .match-row {
+  border: var(--stroke-fat);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: 14px 16px;
+}
+
 /* Group card ────────────────────────────────────────── */
 
 .group-card {
@@ -668,7 +725,8 @@ a { color: inherit; text-decoration: none; cursor: pointer; }
 .match-row--done { opacity: 0.92; }
 .match-row__top {
   display: flex;
-  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.06em;
@@ -677,6 +735,15 @@ a { color: inherit; text-decoration: none; cursor: pointer; }
   margin-bottom: 8px;
 }
 .match-row__time {}
+.match-row__group {
+  background: var(--ink);
+  color: var(--yellow);
+  border-radius: var(--radius-pill);
+  padding: 2px 8px;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+}
+.match-row__status { margin-left: auto; }
 .match-row__status--done { color: var(--green); }
 .match-row__status--picked { color: var(--purple); }
 .match-row__status--open { color: var(--pink); }

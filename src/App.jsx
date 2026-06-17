@@ -102,6 +102,18 @@ export default function App() {
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
+  // Fixtures view: layout (date list vs group grid) + the date-list filter.
+  const [fixturesLayout, setFixturesLayout] = useState(() => {
+    const saved = localStorage.getItem('bloomcup.fixturesLayout');
+    return saved === 'group' || saved === 'date' ? saved : 'date';
+  });
+  const [dateFilter, setDateFilter] = useState('today');
+
+  function chooseFixturesLayout(next) {
+    setFixturesLayout(next);
+    localStorage.setItem('bloomcup.fixturesLayout', next);
+  }
+
   function handleNav(next) {
     setView(next);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -332,6 +344,28 @@ export default function App() {
   const sortedGroupLabels = Object.keys(groups).sort();
   const accentCycle = ['pink', 'yellow', 'green', 'purple'];
 
+  // Stable accent per group label, shared by both fixtures layouts.
+  const accentByGroup = {};
+  sortedGroupLabels.forEach((label, idx) => {
+    accentByGroup[label] = accentCycle[idx % accentCycle.length];
+  });
+
+  // Flat list of every match enriched for the date-ordered view.
+  const enrichedMatches = matches.map((m) => {
+    const home = entryById[m.home_entry_id];
+    const away = entryById[m.away_entry_id];
+    const groupLabel = home?.group_label || 'KO';
+    return {
+      ...m,
+      home,
+      away,
+      modelPred: modelPredById[m.id],
+      userPred: userPredById[m.id],
+      groupLabel,
+      accent: accentByGroup[groupLabel] || 'pink',
+    };
+  });
+
   // Compute "your" stats for the hero ribbon
   const yourPicks = user ? predictions.filter((p) => p.user_id === user.id) : [];
   const yourCorrect = yourPicks.filter((p) => (p.points_awarded ?? 0) > 0).length;
@@ -341,19 +375,13 @@ export default function App() {
   const modelPoints = modelPicks.reduce((a, p) => a + (p.points_awarded ?? 0), 0);
   const vsModel = yourPoints - modelPoints;
 
-  // What hasn't the user picked yet? (for the hero CTA)
+  // How many upcoming matches the user still hasn't picked (for the hero CTA).
   const yourPickedIds = new Set(yourPicks.map((p) => p.match_id));
-  const firstUnpicked = user
-    ? matches.find((m) => !yourPickedIds.has(m.id) && new Date(m.scheduled_at) > new Date())
-    : null;
   const unpickedCount = user
     ? matches.filter(
         (m) => !yourPickedIds.has(m.id) && new Date(m.scheduled_at) > new Date()
       ).length
     : matches.length;
-  const firstUnpickedGroup = firstUnpicked
-    ? entryById[firstUnpicked.home_entry_id]?.group_label
-    : null;
 
   // Player rank (humans only)
   const byUser = new Map();
@@ -385,7 +413,6 @@ export default function App() {
           yourPoints={yourPoints}
           vsModel={vsModel}
           unpickedCount={unpickedCount}
-          firstUnpickedGroup={firstUnpickedGroup}
           onNav={handleNav}
           onStartSweepstake={startSweepstake}
         />
@@ -402,19 +429,36 @@ export default function App() {
               <Leaf size={32} color="#6dba63" />
             </h2>
 
-            <div className="groups">
-              {sortedGroupLabels.map((label, idx) => (
-                <GroupCard
-                  key={label}
-                  label={label}
-                  accent={accentCycle[idx % accentCycle.length]}
-                  teams={[...groups[label].teams.values()]}
-                  matches={groups[label].matches}
-                  user={user}
-                  onPredictionSaved={refreshUserPredictions}
-                />
-              ))}
-            </div>
+            <FixturesControls
+              layout={fixturesLayout}
+              onLayout={chooseFixturesLayout}
+              dateFilter={dateFilter}
+              onDateFilter={setDateFilter}
+            />
+
+            {fixturesLayout === 'group' ? (
+              <div className="groups">
+                {sortedGroupLabels.map((label) => (
+                  <GroupCard
+                    key={label}
+                    label={label}
+                    accent={accentByGroup[label]}
+                    teams={[...groups[label].teams.values()]}
+                    matches={groups[label].matches}
+                    user={user}
+                    onPredictionSaved={refreshUserPredictions}
+                  />
+                ))}
+              </div>
+            ) : (
+              <FixturesByDate
+                matches={enrichedMatches}
+                filter={dateFilter}
+                onFilter={setDateFilter}
+                user={user}
+                onPredictionSaved={refreshUserPredictions}
+              />
+            )}
           </section>
         )}
 
@@ -539,7 +583,7 @@ function Nav({ user, profile, view, onNav }) {
 
 function Hero({
   tournament, signedIn, yourRank, yourCorrect, yourPicks, yourPoints, vsModel,
-  unpickedCount, firstUnpickedGroup, onNav, onStartSweepstake,
+  unpickedCount, onNav, onStartSweepstake,
 }) {
   const daysToKickoff = (() => {
     if (!tournament?.start_date) return null;
@@ -557,10 +601,7 @@ function Hero({
       onNav?.('leaderboard');
       return;
     }
-    const target = firstUnpickedGroup
-      ? document.getElementById(`group-${firstUnpickedGroup}`)
-      : document.querySelector('.groups-section');
-    target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.querySelector('.groups-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   const ctaContent = !signedIn
@@ -1633,6 +1674,142 @@ function AccountCard({ user }) {
 }
 
 /* ─────────────────────────────────────────────────────────────
+   Fixtures controls (layout toggle + date filter)
+   ───────────────────────────────────────────────────────────── */
+
+function FixturesControls({ layout, onLayout, dateFilter, onDateFilter }) {
+  return (
+    <div className="fix-controls">
+      <div className="fix-controls__group">
+        <button
+          type="button"
+          className={`pool-pill ${layout === 'date' ? 'pool-pill--active' : ''}`}
+          onClick={() => onLayout('date')}
+        >
+          📅 By date
+        </button>
+        <button
+          type="button"
+          className={`pool-pill ${layout === 'group' ? 'pool-pill--active' : ''}`}
+          onClick={() => onLayout('group')}
+        >
+          ✿ By group
+        </button>
+      </div>
+
+      {layout === 'date' && (
+        <div className="fix-controls__group">
+          {[
+            ['today', 'Today'],
+            ['upcoming', 'Upcoming'],
+            ['finished', 'Finished'],
+          ].map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              className={`pool-pill ${dateFilter === key ? 'pool-pill--active' : ''}`}
+              onClick={() => onDateFilter(key)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Fixtures by date (chronological, day-grouped)
+   ───────────────────────────────────────────────────────────── */
+
+function FixturesByDate({ matches, filter, onFilter, user, onPredictionSaved }) {
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const startOfTomorrow = new Date(startOfToday);
+  startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
+
+  const inFilter = (m) => {
+    const when = new Date(m.scheduled_at);
+    if (filter === 'today') {
+      return when >= startOfToday && when < startOfTomorrow;
+    }
+    if (filter === 'upcoming') {
+      return when >= startOfTomorrow;
+    }
+    // finished
+    return m.status === 'finished' || when < startOfToday;
+  };
+
+  const filtered = matches
+    .filter(inFilter)
+    .sort((a, b) =>
+      filter === 'finished'
+        ? new Date(b.scheduled_at) - new Date(a.scheduled_at)
+        : new Date(a.scheduled_at) - new Date(b.scheduled_at),
+    );
+
+  if (filtered.length === 0) {
+    const empty = {
+      today: ['No matches today ✿', 'upcoming', 'see upcoming games'],
+      upcoming: ['No upcoming matches', 'finished', 'see finished games'],
+      finished: ['No finished matches yet', 'today', "see today's games"],
+    }[filter];
+    return (
+      <div className="my-picks__empty">
+        <Flower size={44} c1="#ff6b9d" c2="#ffd93d" />
+        <p className="my-picks__empty-title">{empty[0]}</p>
+        <p className="my-picks__empty-sub">
+          <button type="button" className="my-picks__link" onClick={() => onFilter(empty[1])}>
+            {empty[2]}
+          </button>
+        </p>
+      </div>
+    );
+  }
+
+  // Bucket into calendar days, preserving the sorted order.
+  const days = [];
+  const byKey = new Map();
+  for (const m of filtered) {
+    const key = new Date(m.scheduled_at).toDateString();
+    if (!byKey.has(key)) {
+      const bucket = { key, items: [] };
+      byKey.set(key, bucket);
+      days.push(bucket);
+    }
+    byKey.get(key).items.push(m);
+  }
+
+  return (
+    <div className="fix-days">
+      {days.map((day) => (
+        <div key={day.key} className="fix-day">
+          <div className="fix-day__header">
+            <span className="fix-day__label">{formatDayHeader(day.items[0].scheduled_at)}</span>
+            <span className="fix-day__count">
+              {day.items.length} {day.items.length === 1 ? 'match' : 'matches'}
+            </span>
+          </div>
+          <div className="fix-day__list">
+            {day.items.map((m) => (
+              <MatchRow
+                key={m.id}
+                match={m}
+                accent={m.accent}
+                groupLabel={m.groupLabel}
+                user={user}
+                onPredictionSaved={onPredictionSaved}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
    Group Card
    ───────────────────────────────────────────────────────────── */
 
@@ -1679,7 +1856,7 @@ function accentColor(name) {
    Match row
    ───────────────────────────────────────────────────────────── */
 
-function MatchRow({ match, accent, user, onPredictionSaved }) {
+function MatchRow({ match, accent, user, onPredictionSaved, groupLabel }) {
   const finished = match.status === 'finished' && match.result;
   const modelPred = match.modelPred;
   const userPicked = !!match.userPred;
@@ -1688,6 +1865,11 @@ function MatchRow({ match, accent, user, onPredictionSaved }) {
     <div className={`match-row ${finished ? 'match-row--done' : ''}`}>
       <div className="match-row__top">
         <span className="match-row__time">{formatMatchTime(match.scheduled_at)}</span>
+        {groupLabel && (
+          <span className="match-row__group">
+            {groupLabel === 'KO' ? 'KO' : `Grp ${groupLabel}`}
+          </span>
+        )}
         {finished ? (
           <span className="match-row__status match-row__status--done">FINAL ●</span>
         ) : userPicked ? (
@@ -1839,6 +2021,19 @@ function formatMatchTime(iso) {
     weekday: 'short', month: 'short', day: 'numeric',
     hour: 'numeric', minute: '2-digit',
   });
+}
+
+function formatDayHeader(iso) {
+  const d = new Date(iso);
+  const day = new Date(d);
+  day.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((day - today) / 86400000);
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Tomorrow';
+  if (diffDays === -1) return 'Yesterday';
+  return d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' });
 }
 
 function explainBotPick(match, modelPred) {
